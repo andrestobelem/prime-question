@@ -36,9 +36,8 @@ Offer local, staging, production, and allow a custom answer.
 
 The tool accepts options with labels and optional descriptions. It adds
 `Type something.` as the final option. Selecting it opens a text-input dialog.
-Long question text wraps inside the dialog and the tool renderer. The UI uses
-Nerd Font glyphs for question, success, custom-answer, cancellation, and error
-states. With FiraCode Nerd Font Mono, these symbols are included in the terminal
+Long question text wraps inside the dialog and the tool renderer. The UI uses theme colors and Nerd Font glyphs for question, success,
+custom-answer, cancellation, and error states. With FiraCode Nerd Font Mono, these symbols are included in the terminal
 font; Powerline is not a separate font. Press `Esc` to cancel either dialog. If
 the tool execution is aborted, the active dialog is dismissed as well.
 

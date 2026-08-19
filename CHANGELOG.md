@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - 2026-08-19
+
+### Fixed
+
+- Apply semantic theme colors to question options and result states.
+- Added regression coverage for themed rendering.
+
+
 ## 0.1.2 - 2026-08-19
 
 ### Added

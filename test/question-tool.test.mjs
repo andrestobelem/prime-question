@@ -263,3 +263,37 @@ test("renders malformed call options without throwing", () => {
   assert.match(renderedText, /1\. \(invalid option\)/);
   assert.match(renderedText, /2\. \(invalid option\)/);
 });
+
+
+test("uses theme colors for question calls and results", async () => {
+  const tool = createTool();
+  const theme = {
+    fg: (color, text) => `<${color}>${text}</${color}>`,
+    bold: (text) => `**${text}**`,
+  };
+  const callText = tool
+    .renderCall({ question: "Where?", options: [{ label: "Local" }] }, theme)
+    .render(200)
+    .join(" ");
+
+  assert.match(callText, /<toolTitle>\*\* question \*\*<\/toolTitle>/);
+  assert.match(callText, /<text>Where\?<\/text>/);
+  assert.match(callText, /<accent>1\. Local<\/accent>/);
+  assert.match(callText, /<muted>Options: <\/muted>/);
+
+  const result = await tool.execute(
+    "test",
+    { question: "Where?", options: [{ label: "Local" }] },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => "1. Local",
+        input: async () => undefined,
+      },
+    },
+  );
+  const resultText = tool.renderResult(result, {}, theme).render(80)[0].trimEnd();
+  assert.equal(resultText, "<success> </success><accent>1. Local</accent>");
+});

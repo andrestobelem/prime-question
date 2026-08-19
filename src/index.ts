@@ -193,9 +193,17 @@ export default function question(pi: ExtensionAPI): void {
       const questionText = typeof args.question === "string" ? args.question : "";
       let text =
         theme.fg("toolTitle", theme.bold(`${QUESTION_ICON} question `)) +
-        theme.fg("muted", questionText);
+        theme.fg("text", questionText);
       if (numbered.length > 0) {
-        text += `\n${theme.fg("dim", `  ${POWERLINE_SEPARATOR} Options: ${numbered.join(", ")}`)}`;
+        const renderedOptions = numbered
+          .map((option, index) =>
+            theme.fg(index === numbered.length - 1 ? "muted" : "accent", option),
+          )
+          .join(theme.fg("dim", ", "));
+        text +=
+          `\n${theme.fg("dim", `  ${POWERLINE_SEPARATOR} `)}` +
+          theme.fg("muted", "Options: ") +
+          renderedOptions;
       }
       return new Text(text, 0, 0);
     },
@@ -208,17 +216,26 @@ export default function question(pi: ExtensionAPI): void {
       }
 
       if (details.status === "error") {
-        return new Text(theme.fg("error", `${ERROR_ICON} ${resultText}`), 0, 0);
+        return new Text(
+          theme.fg("error", `${ERROR_ICON} `) + theme.fg("muted", resultText),
+          0,
+          0,
+        );
       }
 
       if (details.answer === null) {
-        return new Text(theme.fg("warning", `${CANCEL_ICON} Cancelled`), 0, 0);
+        return new Text(
+          theme.fg("warning", `${CANCEL_ICON} `) + theme.fg("muted", "Cancelled"),
+          0,
+          0,
+        );
       }
 
       if (details.wasCustom) {
         return new Text(
           theme.fg("success", `${SUCCESS_ICON} `) +
-            theme.fg("muted", `${CUSTOM_ICON} (wrote) `) +
+            theme.fg("accent", `${CUSTOM_ICON} `) +
+            theme.fg("muted", "(wrote) ") +
             theme.fg("accent", details.answer),
           0,
           0,
