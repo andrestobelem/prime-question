@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 - 2026-08-19
+
+### Added
+
+- Added Nerd Font symbols and a Powerline-thin separator to the question UI.
+- Documented wrapped prompts and terminal font requirements.
+
+
 ## 0.1.1 - 2026-08-19
 
 ### Fixed

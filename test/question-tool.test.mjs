@@ -78,9 +78,9 @@ test("keeps long question content available to the daemon selector", async () =>
 
   assert.deepEqual(receivedOptions, [
     `1. ${optionText} — ${descriptionText}`,
-    "2. Type something.",
+    "2.  Type something.",
   ]);
-  assert.equal(receivedTitle, `Question\n${questionText}`);
+  assert.equal(receivedTitle, ` Question\n${questionText}`);
   assert.ok(!receivedTitle.includes(optionText));
   assert.ok(!receivedTitle.includes(descriptionText));
   // `ctx.ui.select()` renders its title with one column of horizontal padding.
@@ -105,7 +105,7 @@ test("collects a free-form answer", async () => {
     {
       hasUI: true,
       ui: {
-        select: async () => "2. Type something.",
+        select: async () => "2.  Type something.",
         input: async () => "BizaClaw_Remote",
       },
     },
@@ -155,7 +155,7 @@ test("propagates the abort signal to both dialogs", async () => {
       ui: {
         select: async (_title, _options, options) => {
           selectOptions = options;
-          return "2. Type something.";
+          return "2.  Type something.";
         },
         input: async (_title, _placeholder, options) => {
           inputOptions = options;
@@ -219,7 +219,7 @@ test("preserves the selected index when option labels repeat", async () => {
   assert.equal(result.content[0].text, "User selected: 2. Deploy");
   assert.equal(result.details.selectedIndex, 1);
   const rendered = tool.renderResult(result, {}, { fg: (_color, text) => text }).render(80);
-  assert.equal(rendered[0].trimEnd(), "✓ 2. Deploy");
+  assert.equal(rendered[0].trimEnd(), " 2. Deploy");
 });
 
 test("renders execution errors instead of labelling them as cancellation", async () => {
@@ -234,7 +234,7 @@ test("renders execution errors instead of labelling them as cancellation", async
 
   assert.equal(result.details.status, "error");
   const rendered = tool.renderResult(result, {}, { fg: (_color, text) => text }).render(80);
-  assert.equal(rendered[0].trimEnd(), "Error: UI not available (running in non-interactive mode)");
+  assert.equal(rendered[0].trimEnd(), " Error: UI not available (running in non-interactive mode)");
 });
 
 test("handles an empty option list as an execution error", async () => {

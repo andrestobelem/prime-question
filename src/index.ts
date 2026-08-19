@@ -16,7 +16,13 @@ interface QuestionDetails {
   selectedIndex: number | null;
 }
 
-const CUSTOM_OPTION = "Type something.";
+const CUSTOM_ICON = "";
+const CUSTOM_OPTION = `${CUSTOM_ICON} Type something.`;
+const QUESTION_ICON = "";
+const SUCCESS_ICON = "";
+const CANCEL_ICON = "";
+const ERROR_ICON = "";
+const POWERLINE_SEPARATOR = "";
 
 const OptionSchema = Type.Object({
   label: Type.String({ description: "Display label for the option" }),
@@ -111,7 +117,7 @@ export default function question(pi: ExtensionAPI): void {
       });
       const customOptionIndex = params.options.length + 1;
       selectionOptions.push(`${customOptionIndex}. ${CUSTOM_OPTION}`);
-      const selectionPrompt = ["Question", params.question].join("\n");
+      const selectionPrompt = [`${QUESTION_ICON} Question`, params.question].join("\n");
       const selected = await ctx.ui.select(selectionPrompt, selectionOptions, { signal });
 
       if (signal?.aborted || !selected) {
@@ -124,7 +130,11 @@ export default function question(pi: ExtensionAPI): void {
       }
 
       if (selectedIndex === params.options.length) {
-        const customAnswer = await ctx.ui.input(params.question, "Type your answer", { signal });
+        const customAnswer = await ctx.ui.input(
+          `${QUESTION_ICON} ${params.question}`,
+          "Type your answer",
+          { signal },
+        );
         if (signal?.aborted) {
           return cancelledResult(params.question, options);
         }
@@ -182,10 +192,10 @@ export default function question(pi: ExtensionAPI): void {
       );
       const questionText = typeof args.question === "string" ? args.question : "";
       let text =
-        theme.fg("toolTitle", theme.bold("question ")) +
+        theme.fg("toolTitle", theme.bold(`${QUESTION_ICON} question `)) +
         theme.fg("muted", questionText);
       if (numbered.length > 0) {
-        text += `\n${theme.fg("dim", `  Options: ${numbered.join(", ")}`)}`;
+        text += `\n${theme.fg("dim", `  ${POWERLINE_SEPARATOR} Options: ${numbered.join(", ")}`)}`;
       }
       return new Text(text, 0, 0);
     },
@@ -198,17 +208,17 @@ export default function question(pi: ExtensionAPI): void {
       }
 
       if (details.status === "error") {
-        return new Text(theme.fg("error", resultText), 0, 0);
+        return new Text(theme.fg("error", `${ERROR_ICON} ${resultText}`), 0, 0);
       }
 
       if (details.answer === null) {
-        return new Text(theme.fg("warning", "Cancelled"), 0, 0);
+        return new Text(theme.fg("warning", `${CANCEL_ICON} Cancelled`), 0, 0);
       }
 
       if (details.wasCustom) {
         return new Text(
-          theme.fg("success", "✓ ") +
-            theme.fg("muted", "(wrote) ") +
+          theme.fg("success", `${SUCCESS_ICON} `) +
+            theme.fg("muted", `${CUSTOM_ICON} (wrote) `) +
             theme.fg("accent", details.answer),
           0,
           0,
@@ -219,7 +229,11 @@ export default function question(pi: ExtensionAPI): void {
       // old label-based lookup for results produced by a previous package version.
       const index = details.selectedIndex ?? details.options.indexOf(details.answer);
       const display = index >= 0 ? `${index + 1}. ${details.answer}` : details.answer;
-      return new Text(theme.fg("success", "✓ ") + theme.fg("accent", display), 0, 0);
+      return new Text(
+        theme.fg("success", `${SUCCESS_ICON} `) + theme.fg("accent", display),
+        0,
+        0,
+      );
     },
   });
 }
