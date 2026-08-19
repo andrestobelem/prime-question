@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import question from "../dist/index.js";
+import { Text } from "@earendil-works/pi-tui";
 
 function createTool() {
   let tool;
@@ -30,7 +31,7 @@ test("registers the question tool and returns a selected option", async () => {
     {
       hasUI: true,
       ui: {
-        select: async () => "Production",
+        select: async () => "2. Production",
         input: async () => undefined,
       },
     },
@@ -38,6 +39,55 @@ test("registers the question tool and returns a selected option", async () => {
 
   assert.equal(result.content[0].text, "User selected: 2. Production");
   assert.equal(result.details.answer, "Production");
+  assert.equal(result.details.wasCustom, false);
+});
+
+test("keeps long question content available to the daemon selector", async () => {
+  const tool = createTool();
+  const questionText =
+    "Which deployment target should receive this change after all validation steps complete?";
+  const optionText =
+    "Production environment with the carefully controlled release process";
+  const descriptionText =
+    "Deploy only after the long-running checks and approval workflow finish";
+  let receivedTitle;
+  let receivedOptions;
+
+  const result = await tool.execute(
+    "test",
+    {
+      question: questionText,
+      options: [{ label: optionText, description: descriptionText }],
+    },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async (title, options) => {
+          receivedTitle = title;
+          receivedOptions = options;
+          return `1. ${optionText}`;
+        },
+        input: async () => undefined,
+      },
+    },
+  );
+
+  assert.deepEqual(receivedOptions, [
+    `1. ${optionText}`,
+    "2. Type something.",
+  ]);
+  assert.ok(receivedTitle.includes(questionText));
+  assert.ok(receivedTitle.includes(optionText));
+  assert.ok(receivedTitle.includes(descriptionText));
+  const rendered = new Text(receivedTitle, 0, 0).render(40);
+  assert.ok(rendered.every((line) => line.length <= 40));
+  const renderedText = rendered.join(" ").replace(/\s+/g, " ");
+  assert.ok(renderedText.includes(questionText));
+  assert.ok(renderedText.includes(optionText));
+  assert.ok(renderedText.includes(descriptionText));
+  assert.equal(result.details.answer, optionText);
   assert.equal(result.details.wasCustom, false);
 });
 
@@ -54,7 +104,7 @@ test("collects a free-form answer", async () => {
     {
       hasUI: true,
       ui: {
-        select: async () => "Type something.",
+        select: async () => "2. Type something.",
         input: async () => "BizaClaw_Remote",
       },
     },

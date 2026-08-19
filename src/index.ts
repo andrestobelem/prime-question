@@ -91,19 +91,36 @@ export default function question(pi: ExtensionAPI): void {
         };
       }
 
-      const displayOptions = params.options.map((option) =>
-        option.description ? `${option.label} — ${option.description}` : option.label,
+      // Keep each selector value unique while retaining a readable label. The selector
+      // truncates long rows to its available width, and the prompt above keeps full context.
+      const selectionOptions = params.options.map(
+        (option, index) => `${index + 1}. ${option.label}`,
       );
-      const selected = await ctx.ui.select(params.question, [
-        ...displayOptions,
+      const customOptionIndex = params.options.length + 1;
+      selectionOptions.push(`${customOptionIndex}. ${CUSTOM_OPTION}`);
+      const selectionPrompt = [
+        "Question",
+        params.question,
+        "",
+        "Options:",
+        ...params.options.map((option) => {
+          const description = option.description ? ` — ${option.description}` : "";
+          return `${option.label}${description}`;
+        }),
         CUSTOM_OPTION,
-      ]);
+      ].join("\n");
+      const selected = await ctx.ui.select(selectionPrompt, selectionOptions);
 
       if (!selected) {
         return cancelledResult(params.question, options);
       }
 
-      if (selected === CUSTOM_OPTION) {
+      const selectedIndex = selectionOptions.indexOf(selected);
+      if (selectedIndex < 0) {
+        return cancelledResult(params.question, options);
+      }
+
+      if (selectedIndex === params.options.length) {
         const customAnswer = await ctx.ui.input(params.question, "Type your answer");
         const answer = customAnswer?.trim();
         if (!answer) {
@@ -121,9 +138,11 @@ export default function question(pi: ExtensionAPI): void {
         };
       }
 
-      const selectedIndex = displayOptions.indexOf(selected);
       const selectedOption = params.options[selectedIndex];
-      const answer = selectedOption?.label ?? selected;
+      if (!selectedOption) {
+        return cancelledResult(params.question, options);
+      }
+      const answer = selectedOption.label;
 
       return {
         content: [
