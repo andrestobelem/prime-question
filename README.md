@@ -36,8 +36,9 @@ Offer local, staging, production, and allow a custom answer.
 
 The tool accepts options with labels and optional descriptions. It adds
 `Type something.` as the final option. Selecting it opens a text-input dialog.
-Press `Esc` to cancel either dialog. If the tool execution is aborted, the active
-dialog is dismissed as well.
+Long question text wraps inside the dialog and the tool renderer. Press `Esc` to
+cancel either dialog. If the tool execution is aborted, the active dialog is
+dismissed as well.
 
 ## Development
 

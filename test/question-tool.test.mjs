@@ -83,7 +83,8 @@ test("keeps long question content available to the daemon selector", async () =>
   assert.equal(receivedTitle, `Question\n${questionText}`);
   assert.ok(!receivedTitle.includes(optionText));
   assert.ok(!receivedTitle.includes(descriptionText));
-  const rendered = new Text(receivedTitle, 0, 0).render(40);
+  // `ctx.ui.select()` renders its title with one column of horizontal padding.
+  const rendered = new Text(receivedTitle, 1, 0).render(40);
   assert.ok(rendered.every((line) => line.length <= 40));
   const renderedText = rendered.join(" ").replace(/\s+/g, " ");
   assert.ok(renderedText.includes(questionText));
