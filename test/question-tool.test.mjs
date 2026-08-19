@@ -40,6 +40,8 @@ test("registers the question tool and returns a selected option", async () => {
   assert.equal(result.content[0].text, "User selected: 2. Production");
   assert.equal(result.details.answer, "Production");
   assert.equal(result.details.wasCustom, false);
+  assert.equal(result.details.status, "answered");
+  assert.equal(result.details.selectedIndex, 1);
 });
 
 test("keeps long question content available to the daemon selector", async () => {
@@ -111,6 +113,8 @@ test("collects a free-form answer", async () => {
   assert.equal(result.content[0].text, "User wrote: BizaClaw_Remote");
   assert.equal(result.details.answer, "BizaClaw_Remote");
   assert.equal(result.details.wasCustom, true);
+  assert.equal(result.details.status, "answered");
+  assert.equal(result.details.selectedIndex, null);
 });
 
 test("returns an explicit cancellation result", async () => {
@@ -131,4 +135,130 @@ test("returns an explicit cancellation result", async () => {
 
   assert.equal(result.content[0].text, "User cancelled the selection");
   assert.equal(result.details.answer, null);
+  assert.equal(result.details.status, "cancelled");
+});
+
+test("propagates the abort signal to both dialogs", async () => {
+  const tool = createTool();
+  const controller = new AbortController();
+  let selectOptions;
+  let inputOptions;
+
+  const result = await tool.execute(
+    "test",
+    { question: "Which environment?", options: [{ label: "Local" }] },
+    controller.signal,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async (_title, _options, options) => {
+          selectOptions = options;
+          return "2. Type something.";
+        },
+        input: async (_title, _placeholder, options) => {
+          inputOptions = options;
+          return "Remote";
+        },
+      },
+    },
+  );
+
+  assert.equal(selectOptions.signal, controller.signal);
+  assert.equal(inputOptions.signal, controller.signal);
+  assert.equal(result.details.answer, "Remote");
+});
+
+test("does not open a dialog for an already aborted execution", async () => {
+  const tool = createTool();
+  const controller = new AbortController();
+  controller.abort();
+  let opened = false;
+
+  const result = await tool.execute(
+    "test",
+    { question: "Choose", options: [{ label: "A" }] },
+    controller.signal,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => {
+          opened = true;
+          return "1. A";
+        },
+        input: async () => undefined,
+      },
+    },
+  );
+
+  assert.equal(opened, false);
+  assert.equal(result.details.status, "cancelled");
+});
+
+test("preserves the selected index when option labels repeat", async () => {
+  const tool = createTool();
+  const result = await tool.execute(
+    "test",
+    {
+      question: "Which release?",
+      options: [{ label: "Deploy" }, { label: "Deploy" }],
+    },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => "2. Deploy",
+        input: async () => undefined,
+      },
+    },
+  );
+
+  assert.equal(result.content[0].text, "User selected: 2. Deploy");
+  assert.equal(result.details.selectedIndex, 1);
+  const rendered = tool.renderResult(result, {}, { fg: (_color, text) => text }).render(80);
+  assert.equal(rendered[0].trimEnd(), "✓ 2. Deploy");
+});
+
+test("renders execution errors instead of labelling them as cancellation", async () => {
+  const tool = createTool();
+  const result = await tool.execute(
+    "test",
+    { question: "Choose", options: [{ label: "A" }] },
+    undefined,
+    undefined,
+    { hasUI: false, ui: {} },
+  );
+
+  assert.equal(result.details.status, "error");
+  const rendered = tool.renderResult(result, {}, { fg: (_color, text) => text }).render(80);
+  assert.equal(rendered[0].trimEnd(), "Error: UI not available (running in non-interactive mode)");
+});
+
+test("handles an empty option list as an execution error", async () => {
+  const tool = createTool();
+  const result = await tool.execute(
+    "test",
+    { question: "Choose", options: [] },
+    undefined,
+    undefined,
+    { hasUI: true, ui: {} },
+  );
+
+  assert.equal(result.content[0].text, "Error: No options provided");
+  assert.equal(result.details.status, "error");
+});
+
+
+test("renders malformed call options without throwing", () => {
+  const tool = createTool();
+  const rendered = tool.renderCall(
+    { question: "Choose", options: [null, {}] },
+    { fg: (_color, text) => text, bold: (text) => text },
+  ).render(80);
+
+  const renderedText = rendered.join(" ");
+  assert.match(renderedText, /1\. \(invalid option\)/);
+  assert.match(renderedText, /2\. \(invalid option\)/);
 });

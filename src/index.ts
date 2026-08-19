@@ -12,6 +12,8 @@ interface QuestionDetails {
   options: string[];
   answer: string | null;
   wasCustom: boolean;
+  status: "answered" | "cancelled" | "error";
+  selectedIndex: number | null;
 }
 
 const CUSTOM_OPTION = "Type something.";
@@ -41,6 +43,29 @@ function cancelledResult(question: string, options: string[]): {
       options,
       answer: null,
       wasCustom: false,
+      status: "cancelled",
+      selectedIndex: null,
+    },
+  };
+}
+
+function errorResult(
+  question: string,
+  options: string[],
+  text: string,
+): {
+  content: [{ type: "text"; text: string }];
+  details: QuestionDetails;
+} {
+  return {
+    content: [{ type: "text", text }],
+    details: {
+      question,
+      options,
+      answer: null,
+      wasCustom: false,
+      status: "error",
+      selectedIndex: null,
     },
   };
 }
@@ -60,35 +85,22 @@ export default function question(pi: ExtensionAPI): void {
     executionMode: "sequential",
     parameters: QuestionParams,
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const options = params.options.map((option) => option.label);
       if (!ctx.hasUI) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Error: UI not available (running in non-interactive mode)",
-            },
-          ],
-          details: {
-            question: params.question,
-            options,
-            answer: null,
-            wasCustom: false,
-          } satisfies QuestionDetails,
-        };
+        return errorResult(
+          params.question,
+          options,
+          "Error: UI not available (running in non-interactive mode)",
+        );
       }
 
       if (params.options.length === 0) {
-        return {
-          content: [{ type: "text" as const, text: "Error: No options provided" }],
-          details: {
-            question: params.question,
-            options: [],
-            answer: null,
-            wasCustom: false,
-          } satisfies QuestionDetails,
-        };
+        return errorResult(params.question, [], "Error: No options provided");
+      }
+
+      if (signal?.aborted) {
+        return cancelledResult(params.question, options);
       }
 
       // Keep each selector value unique while showing the answer and its description.
@@ -100,9 +112,9 @@ export default function question(pi: ExtensionAPI): void {
       const customOptionIndex = params.options.length + 1;
       selectionOptions.push(`${customOptionIndex}. ${CUSTOM_OPTION}`);
       const selectionPrompt = ["Question", params.question].join("\n");
-      const selected = await ctx.ui.select(selectionPrompt, selectionOptions);
+      const selected = await ctx.ui.select(selectionPrompt, selectionOptions, { signal });
 
-      if (!selected) {
+      if (signal?.aborted || !selected) {
         return cancelledResult(params.question, options);
       }
 
@@ -112,7 +124,10 @@ export default function question(pi: ExtensionAPI): void {
       }
 
       if (selectedIndex === params.options.length) {
-        const customAnswer = await ctx.ui.input(params.question, "Type your answer");
+        const customAnswer = await ctx.ui.input(params.question, "Type your answer", { signal });
+        if (signal?.aborted) {
+          return cancelledResult(params.question, options);
+        }
         const answer = customAnswer?.trim();
         if (!answer) {
           return cancelledResult(params.question, options);
@@ -125,6 +140,8 @@ export default function question(pi: ExtensionAPI): void {
             options,
             answer,
             wasCustom: true,
+            status: "answered",
+            selectedIndex: null,
           } satisfies QuestionDetails,
         };
       }
@@ -147,13 +164,19 @@ export default function question(pi: ExtensionAPI): void {
           options,
           answer,
           wasCustom: false,
+          status: "answered",
+          selectedIndex,
         } satisfies QuestionDetails,
       };
     },
 
     renderCall(args, theme) {
-      const options = Array.isArray(args.options) ? args.options : [];
-      const labels = options.map((option: OptionWithDescription) => option.label);
+      const options: unknown[] = Array.isArray(args.options) ? args.options : [];
+      const labels = options.map((option) => {
+        if (!option || typeof option !== "object") return "(invalid option)";
+        const label = (option as OptionWithDescription).label;
+        return typeof label === "string" ? label : "(invalid option)";
+      });
       const numbered = [...labels, CUSTOM_OPTION].map(
         (option, index) => `${index + 1}. ${option}`,
       );
@@ -169,9 +192,13 @@ export default function question(pi: ExtensionAPI): void {
 
     renderResult(result, _options, theme) {
       const details = result.details as QuestionDetails | undefined;
+      const resultText = result.content.find((item) => item.type === "text")?.text ?? "";
       if (!details) {
-        const text = result.content[0];
-        return new Text(text?.type === "text" ? text.text : "", 0, 0);
+        return new Text(resultText, 0, 0);
+      }
+
+      if (details.status === "error") {
+        return new Text(theme.fg("error", resultText), 0, 0);
       }
 
       if (details.answer === null) {
@@ -188,8 +215,10 @@ export default function question(pi: ExtensionAPI): void {
         );
       }
 
-      const index = details.options.indexOf(details.answer) + 1;
-      const display = index > 0 ? `${index}. ${details.answer}` : details.answer;
+      // Keep the selected position when labels are duplicated. Fall back to the
+      // old label-based lookup for results produced by a previous package version.
+      const index = details.selectedIndex ?? details.options.indexOf(details.answer);
+      const display = index >= 0 ? `${index + 1}. ${details.answer}` : details.answer;
       return new Text(theme.fg("success", "✓ ") + theme.fg("accent", display), 0, 0);
     },
   });
