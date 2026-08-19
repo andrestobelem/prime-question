@@ -67,7 +67,7 @@ test("keeps long question content available to the daemon selector", async () =>
         select: async (title, options) => {
           receivedTitle = title;
           receivedOptions = options;
-          return `1. ${optionText}`;
+          return `1. ${optionText} — ${descriptionText}`;
         },
         input: async () => undefined,
       },
@@ -75,18 +75,16 @@ test("keeps long question content available to the daemon selector", async () =>
   );
 
   assert.deepEqual(receivedOptions, [
-    `1. ${optionText}`,
+    `1. ${optionText} — ${descriptionText}`,
     "2. Type something.",
   ]);
-  assert.ok(receivedTitle.includes(questionText));
-  assert.ok(receivedTitle.includes(optionText));
-  assert.ok(receivedTitle.includes(descriptionText));
+  assert.equal(receivedTitle, `Question\n${questionText}`);
+  assert.ok(!receivedTitle.includes(optionText));
+  assert.ok(!receivedTitle.includes(descriptionText));
   const rendered = new Text(receivedTitle, 0, 0).render(40);
   assert.ok(rendered.every((line) => line.length <= 40));
   const renderedText = rendered.join(" ").replace(/\s+/g, " ");
   assert.ok(renderedText.includes(questionText));
-  assert.ok(renderedText.includes(optionText));
-  assert.ok(renderedText.includes(descriptionText));
   assert.equal(result.details.answer, optionText);
   assert.equal(result.details.wasCustom, false);
 });

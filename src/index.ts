@@ -91,24 +91,15 @@ export default function question(pi: ExtensionAPI): void {
         };
       }
 
-      // Keep each selector value unique while retaining a readable label. The selector
-      // truncates long rows to its available width, and the prompt above keeps full context.
-      const selectionOptions = params.options.map(
-        (option, index) => `${index + 1}. ${option.label}`,
-      );
+      // Keep each selector value unique while showing the answer and its description.
+      // The selector truncates long rows to its available width.
+      const selectionOptions = params.options.map((option, index) => {
+        const description = option.description ? ` — ${option.description}` : "";
+        return `${index + 1}. ${option.label}${description}`;
+      });
       const customOptionIndex = params.options.length + 1;
       selectionOptions.push(`${customOptionIndex}. ${CUSTOM_OPTION}`);
-      const selectionPrompt = [
-        "Question",
-        params.question,
-        "",
-        "Options:",
-        ...params.options.map((option) => {
-          const description = option.description ? ` — ${option.description}` : "";
-          return `${option.label}${description}`;
-        }),
-        CUSTOM_OPTION,
-      ].join("\n");
+      const selectionPrompt = ["Question", params.question].join("\n");
       const selected = await ctx.ui.select(selectionPrompt, selectionOptions);
 
       if (!selected) {
