@@ -19,7 +19,7 @@ For a local tarball, use an explicit npm file spec:
 
 ```sh
 npm pack
-prime-agent package install npm:prime-question@file:/absolute/path/prime-question-0.1.0.tgz
+prime-agent package install npm:prime-question@file:/absolute/path/prime-question-0.1.3.tgz
 ```
 
 Restart Prime Agent, or run `/reload`, after installing the package.
