@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 - 2026-08-27
+
+### Fixed
+
+- Sanitize question text, option labels, descriptions, and answers before terminal rendering.
+- Report unavailable UI, invalid calls, and dialog failures as real tool errors.
+- Handle Prime Agent error results with empty `details` objects without throwing.
+- Keep the custom-answer renderer consistent with the minimum option requirement.
+- Bound user-controlled text and option counts to avoid unbounded UI output.
+- Add a packed-installation smoke test and align the Node requirement with the host.
+
 ## 0.1.3 - 2026-08-19
 
 ### Fixed

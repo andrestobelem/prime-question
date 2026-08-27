@@ -118,6 +118,156 @@ test("collects a free-form answer", async () => {
   assert.equal(result.details.selectedIndex, null);
 });
 
+test("sanitizes terminal control sequences before displaying answers", async () => {
+  const tool = createTool();
+  const hostile = "\u001b[2J\u001b]52;c;SGVsbG8=\u0007Hello";
+  let receivedTitle;
+  let receivedOptions;
+
+  const result = await tool.execute(
+    "test",
+    {
+      question: hostile,
+      options: [{ label: hostile, description: hostile }],
+    },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async (title, options) => {
+          receivedTitle = title;
+          receivedOptions = options;
+          return "1. Hello — Hello";
+        },
+        input: async () => undefined,
+      },
+    },
+  );
+
+  assert.equal(receivedTitle, " Question\nHello");
+  assert.deepEqual(receivedOptions, ["1. Hello — Hello", "2.  Type something."]);
+  assert.equal(result.content[0].text, "User selected: 1. Hello");
+  assert.equal(result.details.answer, "Hello");
+
+  const renderedCall = tool
+    .renderCall(
+      { question: hostile, options: [{ label: hostile }] },
+      { fg: (_color, text) => text, bold: (text) => text },
+    )
+    .render(80)
+    .join(" ");
+  assert.doesNotMatch(renderedCall, /\u001b|52;c;/);
+
+  const renderedResult = tool
+    .renderResult(
+      {
+        content: [{ type: "text", text: "legacy" }],
+        details: {
+          options: [hostile],
+          answer: hostile,
+          wasCustom: false,
+          selectedIndex: 0,
+        },
+      },
+      {},
+      { fg: (_color, text) => text },
+    )
+    .render(80);
+  assert.equal(renderedResult[0].trimEnd(), " 1. Hello");
+  assert.doesNotMatch(renderedResult[0], /\u001b|52;c;/);
+});
+
+test("sanitizes custom answers before returning and rendering them", async () => {
+  const tool = createTool();
+  const hostile = "\u001b[31mRemote\u001b[0m";
+  const result = await tool.execute(
+    "test",
+    { question: "Where?", options: [{ label: "Local" }] },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => "2.  Type something.",
+        input: async () => hostile,
+      },
+    },
+  );
+
+  assert.equal(result.content[0].text, "User wrote: Remote");
+  assert.equal(result.details.answer, "Remote");
+  const rendered = tool
+    .renderResult(result, {}, { fg: (_color, text) => text })
+    .render(80)
+    .join(" ");
+  assert.equal(rendered.trimEnd(), "  (wrote) Remote");
+  assert.doesNotMatch(rendered, /\u001b/);
+});
+
+test("bounds oversized custom answers", async () => {
+  const tool = createTool();
+  const result = await tool.execute(
+    "test",
+    { question: "Where?", options: [{ label: "Local" }] },
+    undefined,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => "2.  Type something.",
+        input: async () => "x".repeat(4_001),
+      },
+    },
+  );
+
+  assert.equal(result.details.answer.length, 4_000);
+  assert.equal(result.content[0].text.length, "User wrote: ".length + 4_000);
+});
+
+test("propagates dialog failures as tool errors", async () => {
+  const tool = createTool();
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "test",
+        { question: "Choose", options: [{ label: "A" }] },
+        undefined,
+        undefined,
+        {
+          hasUI: true,
+          ui: {
+            select: async () => {
+              throw new Error("selector failed");
+            },
+            input: async () => undefined,
+          },
+        },
+      ),
+    { message: "selector failed" },
+  );
+
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "test",
+        { question: "Choose", options: [{ label: "A" }] },
+        undefined,
+        undefined,
+        {
+          hasUI: true,
+          ui: {
+            select: async () => "2.  Type something.",
+            input: async () => {
+              throw new Error("input failed");
+            },
+          },
+        },
+      ),
+    { message: "input failed" },
+  );
+});
+
 test("returns an explicit cancellation result", async () => {
   const tool = createTool();
   const result = await tool.execute(
@@ -197,6 +347,35 @@ test("does not open a dialog for an already aborted execution", async () => {
   assert.equal(result.details.status, "cancelled");
 });
 
+test("does not open custom input after selection aborts", async () => {
+  const tool = createTool();
+  const controller = new AbortController();
+  let opened = false;
+
+  const result = await tool.execute(
+    "test",
+    { question: "Choose", options: [{ label: "A" }] },
+    controller.signal,
+    undefined,
+    {
+      hasUI: true,
+      ui: {
+        select: async () => {
+          controller.abort();
+          return "2.  Type something.";
+        },
+        input: async () => {
+          opened = true;
+          return "Remote";
+        },
+      },
+    },
+  );
+
+  assert.equal(opened, false);
+  assert.equal(result.details.status, "cancelled");
+});
+
 test("preserves the selected index when option labels repeat", async () => {
   const tool = createTool();
   const result = await tool.execute(
@@ -222,35 +401,110 @@ test("preserves the selected index when option labels repeat", async () => {
   assert.equal(rendered[0].trimEnd(), " 2. Deploy");
 });
 
-test("renders execution errors instead of labelling them as cancellation", async () => {
+test("reports unavailable UI as a real tool error", async () => {
   const tool = createTool();
-  const result = await tool.execute(
-    "test",
-    { question: "Choose", options: [{ label: "A" }] },
-    undefined,
-    undefined,
-    { hasUI: false, ui: {} },
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "test",
+        { question: "Choose", options: [{ label: "A" }] },
+        undefined,
+        undefined,
+        { hasUI: false, ui: {} },
+      ),
+    { message: "UI not available (running in non-interactive mode)" },
   );
 
-  assert.equal(result.details.status, "error");
-  const rendered = tool.renderResult(result, {}, { fg: (_color, text) => text }).render(80);
-  assert.equal(rendered[0].trimEnd(), " Error: UI not available (running in non-interactive mode)");
+  // Prime Agent supplies an empty details object for thrown tool errors.
+  const rendered = tool
+    .renderResult(
+      { content: [{ type: "text", text: "Error: UI unavailable" }], details: {} },
+      {},
+      { fg: (_color, text) => text },
+      { isError: true },
+    )
+    .render(80);
+  assert.equal(rendered[0].trimEnd(), " Error: UI unavailable");
 });
 
 test("handles an empty option list as an execution error", async () => {
   const tool = createTool();
-  const result = await tool.execute(
-    "test",
-    { question: "Choose", options: [] },
-    undefined,
-    undefined,
-    { hasUI: true, ui: {} },
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "test",
+        { question: "Choose", options: [] },
+        undefined,
+        undefined,
+        { hasUI: true, ui: {} },
+      ),
+    { message: "No options provided" },
   );
-
-  assert.equal(result.content[0].text, "Error: No options provided");
-  assert.equal(result.details.status, "error");
+  assert.equal(tool.parameters.properties.options.minItems, 1);
+  assert.equal(tool.parameters.properties.options.maxItems, 32);
+  assert.equal(tool.parameters.properties.question.maxLength, 4_000);
+  assert.equal(tool.parameters.properties.options.items.properties.label.maxLength, 500);
+  assert.equal(
+    tool.parameters.properties.options.items.properties.description.maxLength,
+    1_000,
+  );
 });
 
+test("rejects calls with too many options", async () => {
+  const tool = createTool();
+  await assert.rejects(
+    () =>
+      tool.execute(
+        "test",
+        {
+          question: "Choose",
+          options: Array.from({ length: 33 }, (_, index) => ({ label: String(index) })),
+        },
+        undefined,
+        undefined,
+        { hasUI: true, ui: {} },
+      ),
+    { message: "Too many options (maximum 32)" },
+  );
+});
+
+test("renders host errors and malformed details without throwing", () => {
+  const tool = createTool();
+  const theme = { fg: (_color, text) => text };
+
+  const hostError = tool
+    .renderResult(
+      {
+        content: [{ type: "text", text: "\u001b[31mboom\u001b[0m" }],
+        details: {},
+      },
+      {},
+      theme,
+      { isError: true },
+    )
+    .render(80);
+  assert.equal(hostError[0].trimEnd(), " boom");
+  assert.doesNotMatch(hostError[0], /\u001b/);
+
+  const fallback = tool
+    .renderResult({ content: [{ type: "text", text: "boom" }], details: {} }, {}, theme)
+    .render(80);
+  assert.equal(fallback[0].trimEnd(), "boom");
+});
+
+test("does not render a custom option for an empty call", () => {
+  const tool = createTool();
+  const rendered = tool
+    .renderCall(
+      { question: "Choose", options: [] },
+      { fg: (_color, text) => text, bold: (text) => text },
+    )
+    .render(80)
+    .join(" ");
+
+  assert.doesNotMatch(rendered, /Options:/);
+  assert.doesNotMatch(rendered, /Type something\./);
+});
 
 test("renders malformed call options without throwing", () => {
   const tool = createTool();

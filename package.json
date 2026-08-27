@@ -1,6 +1,6 @@
 {
   "name": "prime-question",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Interactive question tool for Prime Agent with selectable options and free-form answers",
   "author": "Andrés Tobelem <andres.tobelem@gmail.com>",
   "license": "MIT",
@@ -34,7 +34,7 @@
     ".": "./dist/index.js"
   },
   "engines": {
-    "node": ">=22.8.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -42,7 +42,7 @@
     "prepack": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
-    "pack:check": "npm run build && npm pack --dry-run"
+    "pack:check": "npm run build && npm pack --dry-run && node scripts/check-pack.mjs"
   },
   "pi": {
     "extensions": [
